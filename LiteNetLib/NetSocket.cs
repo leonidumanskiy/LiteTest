@@ -64,8 +64,8 @@ namespace LiteNetLib
         public const int ReceivePollingTime = 500000; //0.5 second
         private Socket _udpSocketv4;
         private Socket _udpSocketv6;
-        private Thread _threadv4;
-        private Thread _threadv6;
+        //private Thread _threadv4;
+        //private Thread _threadv6;
         private readonly INetSocketListener _listener;
         private const int SioUdpConnreset = -1744830452; //SIO_UDP_CONNRESET = IOC_IN | IOC_VENDOR | 12
         private static readonly IPAddress MulticastAddressV6 = IPAddress.Parse("FF02:0:0:0:0:0:0:1");
@@ -121,58 +121,91 @@ namespace LiteNetLib
             return IsRunning;
         }
 
-        private void ReceiveLogic(object state)
-        {
-            Socket socket = (Socket)state;
+		private void OnReceive(object sender, SocketAsyncEventArgs e, byte[] receiveBuffer, EndPoint bufferEndPoint)
+		{
+			Socket socket = (Socket)sender;
+
+			// Socket error
+			if (e.BytesTransferred == 0 || e.SocketError != SocketError.Success)
+			{
+				switch (e.SocketError)
+				{
+					case SocketError.Interrupted:
+						return;
+					case SocketError.ConnectionReset:
+					case SocketError.MessageSize:
+					case SocketError.TimedOut:
+						break;
+					default:
+						_listener.OnMessageReceived(null, 0, e.SocketError, (IPEndPoint)e.RemoteEndPoint);
+						break;
+				}
+
+				return;
+			}
+
+			// Dispatch message
+			_listener.OnMessageReceived(receiveBuffer, e.BytesTransferred, 0, (IPEndPoint)e.RemoteEndPoint);
+
+			// Recive more data
+			bool willRaiseEvent = _udpSocketv4.ReceiveFromAsync(e);
+
+			if (!willRaiseEvent)
+			{
+				OnReceive(sender, e, receiveBuffer, bufferEndPoint);
+			}
+		}
+
+
+		private void ReceiveLogic(object state)
+		{
+			Socket socket = (Socket)state;
             EndPoint bufferEndPoint = new IPEndPoint(socket.AddressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any, 0);
             byte[] receiveBuffer = new byte[NetConstants.MaxPacketSize];
 
-            while (IsActive())
+            //Console.WriteLine("Socket family: " + socket.AddressFamily);
+            //Console.WriteLine("IPEndpoint: " + bufferEndPoint);
+
+			// Create socket event args
+			var e = new SocketAsyncEventArgs();
+			e.Completed += (sender, args) => OnReceive(socket, args, receiveBuffer, bufferEndPoint);
+			e.RemoteEndPoint = bufferEndPoint;
+			e.SetBuffer(receiveBuffer, 0, NetConstants.MaxPacketSize);
+
+			// Read initial data
+			bool willRaiseEvent = false;
+
+			try
+			{
+				willRaiseEvent = _udpSocketv4.ReceiveFromAsync(e);
+			}
+			// According to msdn this call CAN raise an exception, so let's catch it just in case
+            catch (SocketException ex)
             {
-                int result;
-
-                //Reading data
-                try
+                switch (ex.SocketErrorCode)
                 {
-                    if (socket.Available == 0 && !socket.Poll(ReceivePollingTime, SelectMode.SelectRead))
-                        continue;
-                    result = socket.ReceiveFrom(receiveBuffer, 0, receiveBuffer.Length, SocketFlags.None,
-                        ref bufferEndPoint);
+                    case SocketError.Interrupted:
+						return;
+                    case SocketError.ConnectionReset:
+                    case SocketError.MessageSize:
+                    case SocketError.TimedOut:
+                        NetDebug.Write(NetLogLevel.Trace, "[R]Ignored error: {0} - {1}",
+                            (int) ex.SocketErrorCode, ex.ToString());
+                        break;
+                    default:
+                        NetDebug.WriteError("[R]Error code: {0} - {1}", (int) ex.SocketErrorCode,
+                            ex.ToString());
+                        _listener.OnMessageReceived(null, 0, ex.SocketErrorCode, (IPEndPoint) e.RemoteEndPoint);
+                        break;
                 }
-                catch (SocketException ex)
-                {
-                    switch (ex.SocketErrorCode)
-                    {
-#if UNITY_IOS && !UNITY_EDITOR
-                        case SocketError.NotConnected:
-#endif
-                        case SocketError.Interrupted:
-                        case SocketError.NotSocket:
-                            return;
-                        case SocketError.ConnectionReset:
-                        case SocketError.MessageSize:
-                        case SocketError.TimedOut:
-                            NetDebug.Write(NetLogLevel.Trace, "[R]Ignored error: {0} - {1}",
-                                (int)ex.SocketErrorCode, ex.ToString());
-                            break;
-                        default:
-                            NetDebug.WriteError("[R]Error code: {0} - {1}", (int)ex.SocketErrorCode,
-                                ex.ToString());
-                            _listener.OnMessageReceived(null, 0, ex.SocketErrorCode, (IPEndPoint)bufferEndPoint);
-                            break;
-                    }
-                    continue;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return;
-                }
-
-                //All ok!
-                NetDebug.Write(NetLogLevel.Trace, "[R]Received data from {0}, result: {1}", bufferEndPoint.ToString(), result);
-                _listener.OnMessageReceived(receiveBuffer, result, 0, (IPEndPoint)bufferEndPoint);
             }
-        }
+
+			// If error, call OnReceive
+			if(!willRaiseEvent)
+			{
+				OnReceive(socket, e, receiveBuffer, bufferEndPoint);
+			}
+		}
 
         public bool Bind(IPAddress addressIPv4, IPAddress addressIPv6, int port, bool reuseAddress, bool ipv6)
         {
@@ -199,12 +232,14 @@ namespace LiteNetLib
 
             LocalPort = ((IPEndPoint)_udpSocketv4.LocalEndPoint).Port;
             IsRunning = true;
-            _threadv4 = new Thread(ReceiveLogic)
-            {
-                Name = "SocketThreadv4(" + LocalPort + ")",
-                IsBackground = true
-            };
-            _threadv4.Start(_udpSocketv4);
+            //_threadv4 = new Thread(ReceiveLogic)
+            //{
+            //    Name = "SocketThreadv4(" + LocalPort + ")",
+            //    IsBackground = true
+            //};
+            //_threadv4.Start(_udpSocketv4);
+
+            ReceiveLogic(_udpSocketv4);
 
             //Check IPv6 support
             if (!IPv6Support || !ipv6)
@@ -228,12 +263,14 @@ namespace LiteNetLib
                     // Unity3d throws exception - ignored
                 }
 
-                _threadv6 = new Thread(ReceiveLogic)
-                {
-                    Name = "SocketThreadv6(" + LocalPort + ")",
-                    IsBackground = true
-                };
-                _threadv6.Start(_udpSocketv6);
+                //_threadv6 = new Thread(ReceiveLogic)
+                //{
+                //    Name = "SocketThreadv6(" + LocalPort + ")",
+                //    IsBackground = true
+                //};
+                //_threadv6.Start(_udpSocketv6);
+
+                //ReceiveLogic(_udpSocketv6);
             }
 
             return true;
@@ -375,6 +412,8 @@ namespace LiteNetLib
                 var socket = _udpSocketv4;
                 if (remoteEndPoint.AddressFamily == AddressFamily.InterNetworkV6 && IPv6Support)
                     socket = _udpSocketv6;
+                    
+                //Console.WriteLine("{0}, {1}, {2}, {3}, {4}", data, offset, size, SocketFlags.None, remoteEndPoint);
                 int result = socket.SendTo(data, offset, size, SocketFlags.None, remoteEndPoint);
                 NetDebug.Write(NetLogLevel.Trace, "[S]Send packet to {0}, result: {1}", remoteEndPoint, result);
                 return result;
@@ -413,6 +452,7 @@ namespace LiteNetLib
 #endif
             }
 
+/*
             if (_udpSocketv4 != null)
                 _udpSocketv4.Close();
             if (_udpSocketv6 != null)
@@ -426,6 +466,7 @@ namespace LiteNetLib
                 _threadv6.Join();
             _threadv4 = null;
             _threadv6 = null;
+*/
         }
     }
 }
