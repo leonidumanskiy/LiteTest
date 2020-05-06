@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "LiteServer": {
+      "commandName": "Project",
+      "commandLineArgs": "9001"
+    }
+  }
+}
