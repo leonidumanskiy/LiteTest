@@ -20,8 +20,9 @@ namespace LiteClient
             int numClients = int.Parse(args[2]);
 
             NetManager[] clients = new NetManager[numClients];
+            Console.WriteLine("Connecting to {0} on port {1} with {2} clients", ip, port, numClients);
 
-            for(int i=0; i<numClients;i++)
+            for (int i=0; i<numClients;i++)
             {
                 EventBasedNetListener listener = new EventBasedNetListener();
                 NetManager client = new NetManager(listener);
@@ -31,13 +32,15 @@ namespace LiteClient
 
                 listener.NetworkReceiveEvent += (fromPeer, dataReader, deliveryMethod) =>
                 {
-                    Console.WriteLine("We got: {0}", dataReader.GetString(1024));
+                   // Console.WriteLine("We got: {0}", dataReader.GetString(1024));
                     dataReader.Recycle();
                 };
+
+                Thread.Sleep(15);
             }
 
             // Read data
-            while (!Console.KeyAvailable)
+            while (true)
             {
                 for (int i = 0; i < numClients; i++)
                 {

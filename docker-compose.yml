@@ -1,0 +1,15 @@
+version: '3.4'
+
+services:
+  lite-client:
+    image: lite-client
+    build:
+      context: .
+      dockerfile: LiteClient/Dockerfile
+    command: "lite-server 9001 250"
+  lite-server:
+    image: lite-server
+    build:
+      context: .
+      dockerfile: LiteServer/Dockerfile
+    command: "9001"
