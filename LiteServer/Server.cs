@@ -45,9 +45,9 @@ namespace LiteServer
                 Console.WriteLine($"Peer {peer.EndPoint} disconnected: {disconnectInfo.Reason}");
                 peers.Remove(peer);
             };
-
+            Console.WriteLine("Listening on port " + port);
             ulong numTick = 0;
-            while (!Console.KeyAvailable)
+            while (true)
             {
                 server.PollEvents();
 

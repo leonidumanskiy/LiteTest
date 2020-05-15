@@ -3,6 +3,9 @@
     "LiteServer": {
       "commandName": "Project",
       "commandLineArgs": "9001"
+    },
+    "Docker": {
+      "commandName": "Docker"
     }
   }
 }
