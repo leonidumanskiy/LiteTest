@@ -11,7 +11,7 @@ namespace LiteClient
             if(args.Length < 3)
             {
                 Console.Write("Usage: LiteClient IP PORT NUM_CLIENTS:");
-                Console.WriteLine("Example:  LiteClient 127.0.0.1 9001 5");
+                Console.WriteLine("Example:  LiteClient 127.0.0.1 5001 5");
                 return 1;
             }
 
@@ -21,8 +21,12 @@ namespace LiteClient
 
             NetManager[] clients = new NetManager[numClients];
 
-            for(int i=0; i<numClients;i++)
+            Console.WriteLine($"Connecting clients to {ip}:{port}");
+
+            for (int i=0; i<numClients;i++)
             {
+                Console.WriteLine($"Connecting client {i} to {ip}:{port}");
+
                 EventBasedNetListener listener = new EventBasedNetListener();
                 NetManager client = new NetManager(listener);
                 clients[i] = client;
@@ -31,7 +35,7 @@ namespace LiteClient
 
                 listener.NetworkReceiveEvent += (fromPeer, dataReader, deliveryMethod) =>
                 {
-                    Console.WriteLine("We got: {0}", dataReader.GetString(1024));
+                    Console.WriteLine($"Client {i} got response!"); // dataReader.GetString(1024);
                     dataReader.Recycle();
                 };
             }

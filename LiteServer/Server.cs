@@ -2,6 +2,7 @@
 using LiteNetLib.Utils;
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Text;
 using System.Threading;
 
@@ -13,7 +14,7 @@ namespace LiteServer
         {
             if (args.Length < 1)
             {
-                Console.Write("Usage: LiteServer 9001");
+                Console.Write("Usage: LiteServer 5001");
                 return 1;
             }
 
@@ -24,7 +25,7 @@ namespace LiteServer
             NetManager server = new NetManager(listener);
             server.Start(port);
 
-            List<NetPeer> peers = new List<NetPeer>();
+            List <NetPeer> peers = new List<NetPeer>();
 
             listener.ConnectionRequestEvent += request =>
             {
@@ -46,14 +47,16 @@ namespace LiteServer
                 peers.Remove(peer);
             };
 
+            Console.WriteLine("Running on port " + port);
+
             ulong numTick = 0;
-            while (!Console.KeyAvailable)
+            while (true)
             {
                 server.PollEvents();
 
                 for (int numPeer = 0; numPeer < peers.Count; numPeer++)
                 {
-                    string message = $"Hello peer number! {numPeer} Tick number {numTick} Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. ";
+                    string message = $"Hello peer number! {numPeer} Tick number {numTick}";
                     byte[] bytes = Encoding.UTF8.GetBytes(message);
 
                     NetPeer peer = peers[numPeer];

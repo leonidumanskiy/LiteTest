@@ -1,8 +1,12 @@
 {
   "profiles": {
     "LiteServer": {
-      "commandName": "Project",
-      "commandLineArgs": "9001"
+      "commandName": "Docker",
+      "commandLineArgs": "5001"
+    },
+    "Docker": {
+      "commandName": "Docker",
+      "commandLineArgs": "5001"
     }
   }
 }
